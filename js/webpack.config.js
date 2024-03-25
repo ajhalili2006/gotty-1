@@ -1,4 +1,14 @@
 const path = require('path');
+const TerserPlugin = require("terser-webpack-plugin");
+const LicenseWebpackPlugin = require('license-webpack-plugin').LicenseWebpackPlugin;
+
+var devtool;
+
+if (process.env.DEV === '1') {
+    devtool = 'inline-source-map';
+} else {
+    devtool = 'source-map';
+}
 
 module.exports = {
     entry: "./src/main.ts",
@@ -8,10 +18,13 @@ module.exports = {
     output: {
         path: path.resolve(__dirname, '../bindata/static/js/'),
     },
-    devtool: "source-map",
+    devtool: devtool,
     resolve: {
         extensions: [".ts", ".tsx", ".js"],
     },
+    plugins: [
+        new LicenseWebpackPlugin()
+    ],
     module: {
         rules: [
             {
@@ -24,10 +37,21 @@ module.exports = {
                 use: ["style-loader", "css-loader"],
             },
             {
-                test: /\.js$/,
-                include: /node_modules/,
-                loader: 'license-loader'
+                test: /\.scss$/i,
+                use: ["style-loader", "css-loader", {
+                    loader: "sass-loader",
+                    options: {
+                        sassOptions: {
+                            includePaths: ["node_modules/bootstrap/scss"]
+                        }
+                    }
+                }
+                ],
             },
         ],
+    },
+    optimization: {
+        minimize: true,
+        minimizer: [new TerserPlugin()],
     },
 };

@@ -6,11 +6,12 @@ import (
 	"crypto/x509"
 	"html/template"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"regexp"
+	"strings"
 	noesctmpl "text/template"
 	"time"
 
@@ -44,7 +45,7 @@ func New(factory Factory, options *Options) (*Server, error) {
 	}
 	if options.IndexFile != "" {
 		path := homedir.Expand(options.IndexFile)
-		indexData, err = ioutil.ReadFile(path)
+		indexData, err = os.ReadFile(path)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to read custom index file at `%s`", path)
 		}
@@ -111,7 +112,12 @@ func (server *Server) Run(ctx context.Context, options ...RunOption) error {
 	if server.options.EnableRandomUrl {
 		path = "/" + randomstring.Generate(server.options.RandomUrlLength) + "/"
 	}
-
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	if !strings.HasSuffix(path, "/") {
+		path = path + "/"
+	}
 	handlers := server.setupHandlers(cctx, cancel, path, counter)
 	srv, err := server.setupHTTPServer(handlers)
 	if err != nil {
@@ -247,7 +253,7 @@ func (server *Server) setupHTTPServer(handler http.Handler) (*http.Server, error
 
 func (server *Server) tlsConfig() (*tls.Config, error) {
 	caFile := homedir.Expand(server.options.TLSCACrtFile)
-	caCert, err := ioutil.ReadFile(caFile)
+	caCert, err := os.ReadFile(caFile)
 	if err != nil {
 		return nil, errors.New("could not open CA crt file " + caFile)
 	}

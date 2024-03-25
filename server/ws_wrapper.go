@@ -1,7 +1,10 @@
 package server
 
 import (
+	"io"
+
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 )
 
 type wsWrapper struct {
@@ -28,6 +31,11 @@ func (wsw *wsWrapper) Read(p []byte) (n int, err error) {
 			continue
 		}
 
-		return reader.Read(p)
+		b, err := io.ReadAll(reader)
+		if len(b) > len(p) {
+			return 0, errors.Wrapf(err, "Client message exceeded buffer size")
+		}
+		n = copy(p, b)
+		return n, err
 	}
 }

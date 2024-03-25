@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync/atomic"
 
 	"github.com/gorilla/websocket"
@@ -72,7 +73,11 @@ func (server *Server) generateHandleWS(ctx context.Context, cancel context.Cance
 		}
 		defer conn.Close()
 
-		err = server.processWSConn(ctx, conn)
+		if server.options.PassHeaders {
+			err = server.processWSConn(ctx, conn, r.Header)
+		} else {
+			err = server.processWSConn(ctx, conn, nil)
+		}
 
 		switch err {
 		case ctx.Err():
@@ -87,7 +92,7 @@ func (server *Server) generateHandleWS(ctx context.Context, cancel context.Cance
 	}
 }
 
-func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn) error {
+func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn, headers map[string][]string) error {
 	typ, initLine, err := conn.ReadMessage()
 	if err != nil {
 		return errors.Wrapf(err, "failed to authenticate websocket connection")
@@ -116,7 +121,7 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn) e
 	}
 	params := query.Query()
 	var slave Slave
-	slave, err = server.factory.New(params)
+	slave, err = server.factory.New(params, headers)
 	if err != nil {
 		return errors.Wrapf(err, "failed to create backend")
 	}
@@ -154,13 +159,6 @@ func (server *Server) processWSConn(ctx context.Context, conn *websocket.Conn) e
 	if server.options.Height > 0 {
 		opts = append(opts, webtty.WithFixedRows(server.options.Height))
 	}
-	if server.options.Preferences == nil {
-		server.options.Preferences = &HtermPrefernces{}
-	}
-	// Awkward hack until HtermPreferences can be phased out
-	server.options.Preferences.EnableWebGL = server.options.EnableWebGL
-	opts = append(opts, webtty.WithMasterPreferences(server.options.Preferences))
-
 	tty, err := webtty.New(&wsWrapper{conn}, slave, opts...)
 	if err != nil {
 		return errors.Wrapf(err, "failed to create webtty")
@@ -236,7 +234,12 @@ func (server *Server) handleAuthToken(w http.ResponseWriter, r *http.Request) {
 
 func (server *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript")
-	w.Write([]byte("var gotty_term = '" + server.options.Term + "';"))
+	lines := []string{
+		"var gotty_term = 'xterm';",
+		"var gotty_ws_query_args = '" + server.options.WSQueryArgs + "';",
+	}
+
+	w.Write([]byte(strings.Join(lines, "\n")))
 }
 
 // titleVariables merges maps in a specified order.
